@@ -1,0 +1,11 @@
+{
+    "plugins": [
+        "prettier-plugin-organize-imports",
+        "prettier-plugin-jsdoc",
+        "prettier-plugin-tailwindcss" 
+      ],
+    "printWidth": 100,
+    "tabWidth": 2,
+    "singleQuote": false,
+    "bracketSameLine": true
+}
