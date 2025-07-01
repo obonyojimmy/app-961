@@ -1,38 +1,116 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, TextInput, Pressable, Image, NativeModules, NativeEventEmitter } from 'react-native';
-import { useLocalSearchParams, router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, StyleSheet, Dimensions, Text, NativeModules, NativeEventEmitter } from 'react-native';
 import { mediaDevices, RTCView } from 'react-native-webrtc';
+import { cn } from '@/lib/utils';
 
 const { VideoEffectModule } = NativeModules;
+const eventEmitter = new NativeEventEmitter(NativeModules.VideoEffectModule); 
 
-const eventEmitter = new NativeEventEmitter(NativeModules.VideoEffectModule); // Replace with actual module name
+const { width } = Dimensions.get('window');
+const CIRCLE_RADIUS = width * 0.9;
 
 export default function FaceScanScreen() {
-  const { mode } = useLocalSearchParams<{ mode: 'signup' | 'login' }>();
-  const [stage, setStage] = useState<'scanning' | 'verified'>('scanning');
-  const [pin, setPin] = useState('');
   const [stream, setStream] = useState(null);
-  const [imageUri, setImageUri] = useState<string | null>(null);
-  const [progress, setProgress] = useState(0);
+  const [statusMessage, setStatusMessage] = useState('Scanning ...');
+  const [prompt, setPrompt] = useState('Align your face in the circle');
+
+  const [faceData, setFaceData] = useState(null);
+  const [faceInView, setFaceInView] = useState(false);
+  const [livenessComplete, setlivenessComplete] = useState(false);
+
+  const [validations, setValidations] = useState([
+    { label: 'smile', prompt: 'Smile, look straight ahead', passed: false },
+    { label: 'left-eye', prompt: 'Close your Left eye', passed: false },
+    { label: 'right-eye', prompt: 'Close your Right eye', passed: false },
+    { label: 'turn-left', prompt: 'Turn your head slightly to the left', passed: false },
+    { label: 'turn-right', prompt: 'Turn your head slightly to the right', passed: false },
+    { label: 'turn-up', prompt: 'Turn your head slightly up', passed: false },
+  ])
+
+  const markValidationPassed = (label: string) => {
+    setValidations((prev) =>
+      prev.map((v) => (v.label === label ? { ...v, passed: true } : v))
+    );
+  };
 
   useEffect(() => {
     const sub = eventEmitter.addListener('FaceProbabilities', (faces) => {
       console.log('Face data:', faces);
-      if (faces.length > 0) {
-        const firstFace = faces[0];
-        console.log(`Smile: ${firstFace.smilingProbability}`);
-        console.log(`Left Eye: ${firstFace.leftEyeOpenProbability}`);
-        console.log(`Right Eye: ${firstFace.rightEyeOpenProbability}`);
+      if (!faces.length) {
+        setStatusMessage('No face detected');
+        setPrompt('Align your face in the circle');
+        return;
       }
+      //setStatusMessage('Scanning ...');
+
+      if (faces.length > 1) {
+        setStatusMessage('Only one face at a time');
+        setPrompt('Look straight ahead');
+      }
+      const face = faces[0];
+      //setStatusMessage('Scanning ...');
+      setFaceData(face)
+
     });
-  
+
     return () => sub.remove();
   }, []);
 
   useEffect(() => {
-    (async () => {
+    if (!faceData) return;
+    const { smilingProbability, leftEyeOpenProbability, rightEyeOpenProbability, headEulerAngleX, headEulerAngleY } = faceData;
+    setStatusMessage('');
 
+    // Get the first validation that hasn't passed
+    const nextValidation = validations.find((v) => !v.passed);
+    if (!nextValidation) {
+      setStatusMessage('✅ Liveness Verified');
+      setPrompt('You may proceed');
+      return;
+    }
+    setPrompt(nextValidation.prompt);
+    setStatusMessage('Scanning ...');
+    switch (nextValidation.label) {
+      case 'smile':
+        if (smilingProbability > 0.5) {
+          markValidationPassed('smile');
+        }
+        break;
+      case 'left-eye':
+        if (leftEyeOpenProbability < 0.4 && rightEyeOpenProbability > 0.4) {
+          markValidationPassed('left-eye');
+        }
+        break;
+      case 'right-eye':
+        if (rightEyeOpenProbability < 0.4 && leftEyeOpenProbability > 0.4) {
+          markValidationPassed('right-eye');
+        }
+        break;
+      case 'turn-left':
+        if (headEulerAngleY < 10) {
+          markValidationPassed('turn-left');
+        }
+        break;
+      case 'turn-right':
+        if (headEulerAngleY > -10) {
+          markValidationPassed('turn-right');
+        }
+        break;
+      case 'turn-up':
+        if (Math.abs(headEulerAngleX) > 10) {
+          markValidationPassed('turn-up');
+        }
+        break;
+
+      default:
+        break;
+    }
+  }, [faceData, validations]);
+
+
+
+  useEffect(() => {
+    (async () => {
       const newStream = await mediaDevices.getUserMedia({
         audio: false,
         video: {
@@ -43,9 +121,7 @@ export default function FaceScanScreen() {
       });
       try {
         VideoEffectModule.registerFaceDetectionMethod();
-        //VideoEffectModule.registerFaceMeshMethod();
         newStream.getVideoTracks().forEach(track => {
-
           track._setVideoEffect('faceDetection');
         });
       } catch (error) {
@@ -55,117 +131,44 @@ export default function FaceScanScreen() {
     })();
   }, []);
 
-  useEffect(() => {
-    if (stage === 'scanning' && stream) {
-      simulateScan();
-    }
-  }, [stage, stream]);
-
-
-  const simulateScan = () => {
-    let count = 0;
-    const interval = setInterval(() => {
-      count += 10;
-      setProgress(count);
-      if (count >= 100) {
-        clearInterval(interval);
-        setImageUri('');
-        //setStage('verified');
-      }
-    }, 300);
-  };
-
-
-
-  console.log("stage", stage)
 
   return (
-    <View className="flex-1 bg-white pt-12">
-      {/* Header */}
-      <View className="flex-row justify-between items-center px-4 mb-4">
-        <Text className="text-lg font-semibold text-gray-700">Face detection</Text>
-        <Pressable onPress={() => router.back()}>
-          <Ionicons name="close" size={24} color="#6b7280" />
-        </Pressable>
+    <View className="flex-1 gap-4 bg-white items-center pt-20">
+      {/* feedback messages: ie no face detected, face in view, scanning etc */}
+      <Text className="text-gray-600 text-xl font-semibold">{statusMessage}</Text>
+
+      {/* the camera feed */}
+      <View
+        className="self-center overflow-hidden bg-black"
+        style={{
+          width: CIRCLE_RADIUS,
+          height: CIRCLE_RADIUS,
+          borderRadius: CIRCLE_RADIUS / 2,
+        }}
+      >
+        {stream && (
+
+          <RTCView
+            streamURL={stream.toURL()}
+            style={{ flex: 1 }}
+            objectFit="cover"
+            mirror
+          />
+        )}
+        <View style={{
+          width: CIRCLE_RADIUS,
+          height: CIRCLE_RADIUS,
+          borderRadius: CIRCLE_RADIUS / 2,
+
+        }} className="absolute inset-0 border-4 border-white opacity-20 " />
       </View>
 
-      {/* Scanning View */}
-      {stage === 'scanning' && (
-        <>
-          <View className="self-center w-[90%] aspect-[3/4] rounded-xl overflow-hidden bg-black">
-            {stream && (
-
-              <RTCView
-                streamURL={stream.toURL()}
-                style={{ flex: 1 }}
-                objectFit="cover"
-                mirror
-              />
-            )}
-            <View className="absolute inset-0 border-4 border-white opacity-20 rounded-xl" />
-          </View>
-
-          <View className="mt-6 items-center px-4">
-            <Text className="text-lg font-semibold text-gray-800 mb-2">
-              Saving your data
-            </Text>
-            <View className="w-full h-2 bg-gray-200 rounded-full overflow-hidden mb-2">
-              <View
-                className="h-full bg-green-500"
-                style={{ width: `${progress}%` }}
-              />
-            </View>
-            <Text className="text-sm text-gray-500">
-              Please keep your face centered on the screen and facing forward
-            </Text>
-          </View>
-        </>
-      )}
-
-      {/* Verified View */}
-      {stage === 'verified' && (
-        <View className="flex-1 items-center px-6 pt-8">
-          {/* Captured Face */}
-          {imageUri && (
-            <Image
-              source={{ uri: imageUri }}
-              className="w-40 h-40 rounded-full mb-6"
-            />
-          )}
-
-          {/* Heading */}
-          <Text className="text-2xl font-bold text-gray-800 mb-2">
-            Identity Verified
-          </Text>
-
-          {/* Subtext */}
-          <Text className="text-center text-gray-600 text-sm mb-8">
-            Your smile just unlocked a world of possibilities. You're officially you, and that’s awesome!
-          </Text>
-
-          {/* PIN Entry */}
-          <View className="w-full">
-            <TextInput
-              keyboardType="numeric"
-              secureTextEntry
-              maxLength={6}
-              placeholder="Enter PIN for this device"
-              value={pin}
-              onChangeText={setPin}
-              className="border border-gray-300 rounded px-4 py-3 mb-4 text-base"
-            />
-            <Pressable
-              className="bg-green-600 py-3 rounded"
-              onPress={() => {
-                // TODO: Save PIN and face embedding
-                router.replace('/dash');
-              }}
-            >
-              <Text className="text-white text-center text-lg">Continue</Text>
-            </Pressable>
-          </View>
-        </View>
-      )}
+      {/* show validation prompts */}
+      <Text className="text-center text-xl font-semibold text-gray-800 mt-6 px-8">
+        {prompt}
+      </Text>
     </View>
   );
 }
+
+
