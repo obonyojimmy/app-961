@@ -1,51 +1,51 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, TextInput, Pressable, Image } from 'react-native';
-import { Camera, useCameraDevice, useCameraPermission } from 'react-native-vision-camera';
+import { View, Text, TextInput, Pressable, Image, NativeModules } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import * as FileSystem from 'expo-file-system';
+import { mediaDevices, RTCView } from 'react-native-webrtc';
+
+const { VideoEffectModule } = NativeModules;
 
 export default function FaceScanScreen() {
   const { mode } = useLocalSearchParams<{ mode: 'signup' | 'login' }>();
-  const { hasPermission, requestPermission } = useCameraPermission();
-  const device = useCameraDevice('front');
-  const cameraRef = useRef<Camera | null>(null);
-
   const [stage, setStage] = useState<'scanning' | 'verified'>('scanning');
   const [pin, setPin] = useState('');
+  const [stream, setStream] = useState(null);
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
 
+
   useEffect(() => {
     (async () => {
-      if (!hasPermission) {
-        await requestPermission();
+
+      const newStream = await mediaDevices.getUserMedia({
+        audio: false,
+        video: {
+          facingMode: 'user',
+          width: 640,
+          height: 480,
+        },
+      });
+      try {
+        VideoEffectModule.registerFaceDetectionMethod();
+        //VideoEffectModule.registerFaceMeshMethod();
+        newStream.getVideoTracks().forEach(track => {
+
+          track._setVideoEffect('faceDetection');
+        });
+      } catch (error) {
+        console.log(error);
       }
+      setStream(newStream);
     })();
-  }, [requestPermission]);
+  }, []);
 
   useEffect(() => {
-    if (hasPermission && stage === 'scanning') {
+    if (stage === 'scanning' && stream) {
       simulateScan();
     }
-  }, [hasPermission, stage]);
+  }, [stage, stream]);
 
-  const capturePhoto = useCallback(async () => {
-    if (!cameraRef.current) {
-      console.warn('Camera not ready');
-      return;
-    }
-  
-    try {
-      const photo = await cameraRef.current.takePhoto();
-      const path = `file://${photo.path}`
-      console.log('photo', path);
-      setImageUri(path);
-      setStage('verified');
-    } catch (err) {
-      console.error('Capture error:', err);
-    }
-  }, []);
 
   const simulateScan = () => {
     let count = 0;
@@ -54,19 +54,14 @@ export default function FaceScanScreen() {
       setProgress(count);
       if (count >= 100) {
         clearInterval(interval);
-        capturePhoto();
+        setImageUri('');
+        //setStage('verified');
       }
     }, 300);
   };
 
- 
-  if (!hasPermission) {
-    return (
-      <View className="flex-1 justify-center items-center bg-white">
-        <Text className="text-black">Requesting camera permission...</Text>
-      </View>
-    );
-  }
+
+
   console.log("stage", stage)
 
   return (
@@ -83,14 +78,13 @@ export default function FaceScanScreen() {
       {stage === 'scanning' && (
         <>
           <View className="self-center w-[90%] aspect-[3/4] rounded-xl overflow-hidden bg-black">
-            {device && (
-              <Camera
-                device={device}
-                ref={cameraRef}
+            {stream && (
+
+              <RTCView
+                streamURL={stream.toURL()}
                 style={{ flex: 1 }}
-                isActive={true}
-                photo
-                className="rounded-xl"
+                objectFit="cover"
+                mirror
               />
             )}
             <View className="absolute inset-0 border-4 border-white opacity-20 rounded-xl" />
@@ -115,23 +109,27 @@ export default function FaceScanScreen() {
 
       {/* Verified View */}
       {stage === 'verified' && (
-        <View className="flex-1  gap-4">
-          <View className="items-center">
-            {imageUri && (
-              <Image
-                source={{ uri: imageUri }}
-                className="w-40 h-40 rounded-full mb-4"
-              />
-            )}
-            <Text className="text-xl font-bold text-center mb-1 text-black">
-              Identity Verified
-            </Text>
-            <Text className="text-center text-gray-600 mb-4 px-8 text-sm">
-              Your smile just unlocked a world of possibilities. You're officially you, and that’s awesome!
-            </Text>
-          </View>
+        <View className="flex-1 items-center px-6 pt-8">
+          {/* Captured Face */}
+          {imageUri && (
+            <Image
+              source={{ uri: imageUri }}
+              className="w-40 h-40 rounded-full mb-6"
+            />
+          )}
 
-          <View className="px-8">
+          {/* Heading */}
+          <Text className="text-2xl font-bold text-gray-800 mb-2">
+            Identity Verified
+          </Text>
+
+          {/* Subtext */}
+          <Text className="text-center text-gray-600 text-sm mb-8">
+            Your smile just unlocked a world of possibilities. You're officially you, and that’s awesome!
+          </Text>
+
+          {/* PIN Entry */}
+          <View className="w-full">
             <TextInput
               keyboardType="numeric"
               secureTextEntry
@@ -139,13 +137,13 @@ export default function FaceScanScreen() {
               placeholder="Enter PIN for this device"
               value={pin}
               onChangeText={setPin}
-              className="border border-gray-400 rounded px-4 py-3 mb-4"
+              className="border border-gray-300 rounded px-4 py-3 mb-4 text-base"
             />
             <Pressable
               className="bg-green-600 py-3 rounded"
               onPress={() => {
                 // TODO: Save PIN and face embedding
-                router.replace('/');
+                router.replace('/dash');
               }}
             >
               <Text className="text-white text-center text-lg">Continue</Text>

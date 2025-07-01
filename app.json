@@ -31,11 +31,14 @@
     "plugins": [
       "expo-router",
       [
-        "react-native-vision-camera",
+        "expo-build-properties",
         {
-          "cameraPermissionText": "$(PRODUCT_NAME) needs access to your Camera."
+          "android": {
+            "minSdkVersion": 26
+          }
         }
       ]
+      
     ]
   }
 }
