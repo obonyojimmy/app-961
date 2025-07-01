@@ -26,7 +26,7 @@ public class VideoEffectModule extends ReactContextBaseJavaModule {
 
     @ReactMethod
     public void registerFaceDetectionMethod() {
-        FaceDetectionFactory processor = new FaceDetectionFactory();
+        FaceDetectionFactory processor = new FaceDetectionFactory(getReactApplicationContext());
         ProcessorProvider.addProcessor("faceDetection", processor);
     }
 }

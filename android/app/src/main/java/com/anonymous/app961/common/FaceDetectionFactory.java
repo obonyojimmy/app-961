@@ -6,6 +6,12 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.PointF;
 
+import com.facebook.react.bridge.ReactContext;
+import com.facebook.react.bridge.Arguments;
+import com.facebook.react.bridge.WritableArray;
+import com.facebook.react.bridge.WritableMap;
+import com.facebook.react.modules.core.DeviceEventManagerModule;
+
 import com.oney.WebRTCModule.videoEffects.VideoFrameProcessor;
 import com.oney.WebRTCModule.videoEffects.VideoFrameProcessorFactoryInterface;
 import com.google.mlkit.vision.face.Face;
@@ -17,6 +23,12 @@ import org.webrtc.VideoFrame;
 import java.util.List;
 
 public class FaceDetectionFactory implements VideoFrameProcessorFactoryInterface {
+    private final ReactContext reactContext;
+
+    public FaceDetectionFactory(ReactContext context) {
+        this.reactContext = context;
+    }
+
     @Override
     public VideoFrameProcessor build() {
         return new VideoFrameProcessor() {
@@ -37,7 +49,11 @@ public class FaceDetectionFactory implements VideoFrameProcessorFactoryInterface
 
                 //drawBoundingBoxes(outputBitmap, faces);
                 //drawFaceLandmarks(outputBitmap, faces);
-                drawFaceLandmarks(outputBitmap, faces);  
+                drawFaceLandmarks(outputBitmap, faces);
+                
+                if (!faces.isEmpty()) {
+                    emitFaceData(faces);
+                }
 
                 VideoFrame resultFrame = convertor.bitmap2VideoFrame(outputBitmap,
                         outputBitmap.getWidth(), outputBitmap.getHeight());
@@ -143,6 +159,29 @@ public class FaceDetectionFactory implements VideoFrameProcessorFactoryInterface
                     }
                     
                 }
+            }
+
+            private void emitFaceData(List<Face> faces) {
+                WritableArray faceArray = Arguments.createArray();
+
+                for (Face face : faces) {
+                    WritableMap faceMap = Arguments.createMap();
+
+                    faceMap.putDouble("smilingProbability", face.getSmilingProbability() != null
+                            ? face.getSmilingProbability() : -1);
+
+                    faceMap.putDouble("leftEyeOpenProbability", face.getLeftEyeOpenProbability() != null
+                            ? face.getLeftEyeOpenProbability() : -1);
+
+                    faceMap.putDouble("rightEyeOpenProbability", face.getRightEyeOpenProbability() != null
+                            ? face.getRightEyeOpenProbability() : -1);
+
+                    faceArray.pushMap(faceMap);
+                }
+
+                reactContext
+                        .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
+                        .emit("FaceProbabilities", faceArray);
             }
             
             

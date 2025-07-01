@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, TextInput, Pressable, Image, NativeModules } from 'react-native';
+import { View, Text, TextInput, Pressable, Image, NativeModules, NativeEventEmitter } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { mediaDevices, RTCView } from 'react-native-webrtc';
 
 const { VideoEffectModule } = NativeModules;
+
+const eventEmitter = new NativeEventEmitter(NativeModules.VideoEffectModule); // Replace with actual module name
 
 export default function FaceScanScreen() {
   const { mode } = useLocalSearchParams<{ mode: 'signup' | 'login' }>();
@@ -14,6 +16,19 @@ export default function FaceScanScreen() {
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
 
+  useEffect(() => {
+    const sub = eventEmitter.addListener('FaceProbabilities', (faces) => {
+      console.log('Face data:', faces);
+      if (faces.length > 0) {
+        const firstFace = faces[0];
+        console.log(`Smile: ${firstFace.smilingProbability}`);
+        console.log(`Left Eye: ${firstFace.leftEyeOpenProbability}`);
+        console.log(`Right Eye: ${firstFace.rightEyeOpenProbability}`);
+      }
+    });
+  
+    return () => sub.remove();
+  }, []);
 
   useEffect(() => {
     (async () => {
