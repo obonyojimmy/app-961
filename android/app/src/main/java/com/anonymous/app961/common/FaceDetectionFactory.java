@@ -3,11 +3,13 @@ package com.anonymous.app961.common;
 import org.json.JSONObject;
 import org.json.JSONException;
 
+import android.util.Log;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.PointF;
+import android.graphics.Rect;
 
 import com.facebook.react.bridge.Arguments;
 import com.facebook.react.bridge.ReactContext;
@@ -25,6 +27,8 @@ import org.webrtc.VideoFrame;
 
 import java.util.List;
 import java.util.Collections;
+import java.util.Arrays;
+
 
 public class FaceDetectionFactory implements VideoFrameProcessorFactoryInterface {
 
@@ -39,7 +43,16 @@ public class FaceDetectionFactory implements VideoFrameProcessorFactoryInterface
         return new VideoFrameProcessor() {
             private BitmapVideoFrameConversion convertor;
             private final FaceDetectionHelper detector = new FaceDetectionHelper();
+            private AntiSpoofingHelper antiSpoofHelper;
 
+            {
+                try {
+                    antiSpoofHelper = new AntiSpoofingHelper(reactContext);
+                } catch (Exception e) {
+                    Log.e("FaceDetectionFactory:AntiSpoofingHelper", "Failed to initialize AntiSpoofingHelper", e);
+                }
+            }
+            
             @Override
             public VideoFrame process(VideoFrame frame, SurfaceTextureHelper textureHelper) {
                 if (convertor == null) {
@@ -57,9 +70,9 @@ public class FaceDetectionFactory implements VideoFrameProcessorFactoryInterface
                 drawFaceLandmarks(outputBitmap, faces);  
 
                 if (!faces.isEmpty()) {
-                    emitFaceData(faces);
+                    emitFaceData(faces, inputBitmap);
                 } else {
-                    emitFaceData(Collections.emptyList());
+                    emitFaceData(Collections.emptyList(), inputBitmap);
                 }
 
                 VideoFrame resultFrame = convertor.bitmap2VideoFrame(outputBitmap,
@@ -169,36 +182,56 @@ public class FaceDetectionFactory implements VideoFrameProcessorFactoryInterface
                 }
             }
 
-            /* private void emitDetectionEvent(Face face) {
-                try {
-                    JSONObject faceData = new JSONObject();
-                    faceData.put("smilingProbability", face.getSmilingProbability() != null ? face.getSmilingProbability() : JSONObject.NULL);
-                    faceData.put("leftEyeOpenProbability", face.getLeftEyeOpenProbability() != null ? face.getLeftEyeOpenProbability() : JSONObject.NULL);
-                    faceData.put("rightEyeOpenProbability", face.getRightEyeOpenProbability() != null ? face.getRightEyeOpenProbability() : JSONObject.NULL);
-                    faceData.put("timestamp", System.currentTimeMillis());
             
-                    // Send to JS bridge
-                    WritableMap params = Arguments.createMap();
-                    params.putString("data", faceData.toString());
             
-                    if (reactContext != null) {
-                        reactContext
-                            .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
-                            .emit("onFaceDetection", params);
-                    }
-            
-                } catch (JSONException e) {
-                    e.printStackTrace();
-                }
-            } */
-            private void emitFaceData(List<Face> faces) {
+
+            private void emitFaceData(List<Face> faces, Bitmap inputBitmap) {
                 if (reactContext == null || !reactContext.hasActiveCatalystInstance()) return;
             
                 WritableArray faceArray = Arguments.createArray();
             
-                for (Face face : faces) {
+                if (faces.size() == 1 && antiSpoofHelper != null) {
+                    // Crop the detected face from the frame and run spoof detection
+                    Face face = faces.get(0);
                     WritableMap faceMap = Arguments.createMap();
+                    
+                    /* Bitmap croppedFace = cropFaceFromBitmap(inputBitmap, face); 
+                    float[] spoofScores;
+                    
+                    try {
+                        spoofScores = antiSpoofHelper.runInference(croppedFace);
+                    } catch (Exception e) {
+                        Log.e("FaceDetection:Antispoof", "Spoof detection failed", e);
+                        spoofScores = new float[]{-1, -1}; // fallback values
+                    } */
+                    Rect box = face.getBoundingBox();
+                    int x = Math.max(0, box.left);
+                    int y = Math.max(0, box.top);
+                    int w = Math.min(inputBitmap.getWidth() - x, box.width());
+                    int h = Math.min(inputBitmap.getHeight() - y, box.height());
+
+                    if (w > 0 && h > 0) {
+                        try {
+                            Bitmap croppedFace = Bitmap.createBitmap(inputBitmap, x, y, w, h);
+                            Bitmap resizedFace = Bitmap.createScaledBitmap(croppedFace, 80, 80, true); // Match your ONNX model input size
+
+                            float[] spoofScores = antiSpoofHelper.runInference(resizedFace);
+                            Log.d("SpoofCheck", "Scores: " + Arrays.toString(spoofScores));
+                            
+                            WritableArray scoreArray = Arguments.createArray();
+                            for (float score : spoofScores) {
+                                scoreArray.pushDouble(score);
+                            }
+                            faceMap.putArray("spoofScores", scoreArray);
+                           
+
+                        } catch (Exception e) {
+                            Log.e("SpoofCheck", "Spoof detection error", e);
+                        }
+                    }
             
+                   
+                    //WritableMap faceMap = Arguments.createMap();
                     faceMap.putDouble("smilingProbability", face.getSmilingProbability() != null
                             ? face.getSmilingProbability() : -1);
             
@@ -207,27 +240,72 @@ public class FaceDetectionFactory implements VideoFrameProcessorFactoryInterface
             
                     faceMap.putDouble("rightEyeOpenProbability", face.getRightEyeOpenProbability() != null
                             ? face.getRightEyeOpenProbability() : -1);
-            
-                    // Euler Angles
-                    faceMap.putDouble("headEulerAngleX", face.getHeadEulerAngleX()); // up/down
-                    faceMap.putDouble("headEulerAngleY", face.getHeadEulerAngleY()); // left/right
-                    faceMap.putDouble("headEulerAngleZ", face.getHeadEulerAngleZ()); // tilt
-            
-                    // Optional: bounding box
-                    /* WritableMap bbox = Arguments.createMap();
-                    bbox.putDouble("left", face.getBoundingBox().left);
-                    bbox.putDouble("top", face.getBoundingBox().top);
-                    bbox.putDouble("right", face.getBoundingBox().right);
-                    bbox.putDouble("bottom", face.getBoundingBox().bottom);
-                    faceMap.putMap("boundingBox", bbox); */
+                    //faceMap.putDouble("smilingProbability", getSafeProb(face.getSmilingProbability()));
+                    //faceMap.putDouble("leftEyeOpenProbability", getSafeProb(face.getLeftEyeOpenProbability()));
+                    //faceMap.putDouble("rightEyeOpenProbability", getSafeProb(face.getRightEyeOpenProbability()));
+                    faceMap.putDouble("headEulerAngleX", face.getHeadEulerAngleX());
+                    faceMap.putDouble("headEulerAngleY", face.getHeadEulerAngleY());
+                    faceMap.putDouble("headEulerAngleZ", face.getHeadEulerAngleZ());
+                    //faceMap.putDouble("antiSpoofScore", spoofProb);
             
                     faceArray.pushMap(faceMap);
+                } else {
+                    // Fallback: no spoof or multiple faces
+                    for (Face face : faces) {
+                        WritableMap faceMap = Arguments.createMap();
+                        faceMap.putDouble("smilingProbability", face.getSmilingProbability() != null
+                            ? face.getSmilingProbability() : -1);
+            
+                        faceMap.putDouble("leftEyeOpenProbability", face.getLeftEyeOpenProbability() != null
+                                ? face.getLeftEyeOpenProbability() : -1);
+                
+                        faceMap.putDouble("rightEyeOpenProbability", face.getRightEyeOpenProbability() != null
+                                ? face.getRightEyeOpenProbability() : -1);
+                        //faceMap.putDouble("smilingProbability", getSafeProb(face.getSmilingProbability()));
+                        //faceMap.putDouble("leftEyeOpenProbability", getSafeProb(face.getLeftEyeOpenProbability()));
+                        //faceMap.putDouble("rightEyeOpenProbability", getSafeProb(face.getRightEyeOpenProbability()));
+                        faceMap.putDouble("headEulerAngleX", face.getHeadEulerAngleX());
+                        faceMap.putDouble("headEulerAngleY", face.getHeadEulerAngleY());
+                        faceMap.putDouble("headEulerAngleZ", face.getHeadEulerAngleZ());
+                        //faceMap.putDouble("spoofScores", -1); // Not available
+                        faceArray.pushMap(faceMap);
+                    }
                 }
             
                 reactContext
                     .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
                     .emit("FaceProbabilities", faceArray);
-            }            
+            }
+            
+            
+            private String runAntiSpoof(Bitmap faceBitmap) {
+                try {
+                    float[] output = antiSpoofHelper.runInference(faceBitmap);
+                    int label = output[0] > output[1] ? 0 : 1; 
+                    float score = Math.max(output[0], output[1]);
+                    // todo
+                    return label == 1 ? "Real Face: " + score : "Fake Face: " + score;
+                } catch (Exception e) {
+                    Log.e("AntiSpoof", "Inference failed", e);
+                    return "Spoof detection error";
+                }
+            }
+
+            private Bitmap cropFaceFromBitmap(Bitmap source, Face face) {
+                try {
+                    Rect bounds = face.getBoundingBox();
+                    int left = Math.max(0, bounds.left);
+                    int top = Math.max(0, bounds.top);
+                    int right = Math.min(source.getWidth(), bounds.right);
+                    int bottom = Math.min(source.getHeight(), bounds.bottom);
+            
+                    return Bitmap.createBitmap(source, left, top, right - left, bottom - top);
+                } catch (Exception e) {
+                    Log.e("FaceDetection", "Failed to crop face", e);
+                    return source;
+                }
+            }
+            
             
             
         };
