@@ -33,9 +33,14 @@ import java.util.Arrays;
 public class FaceDetectionFactory implements VideoFrameProcessorFactoryInterface {
 
     private final ReactContext reactContext;
+    private volatile Bitmap latestFrameBitmap = null;
 
     public FaceDetectionFactory(ReactContext context) {
         this.reactContext = context;
+    }
+
+    public Bitmap getLatestFrame() {
+        return latestFrameBitmap;
     }
 
     @Override
@@ -65,14 +70,17 @@ public class FaceDetectionFactory implements VideoFrameProcessorFactoryInterface
                 List<Face> faces = detector.detectFacesSync(inputBitmap);
                 Bitmap outputBitmap = inputBitmap.copy(Bitmap.Config.ARGB_8888, true);
 
+
+                latestFrameBitmap = inputBitmap.copy(Bitmap.Config.ARGB_8888, true);
+
                 //drawBoundingBoxes(outputBitmap, faces);
                 //drawFaceLandmarks(outputBitmap, faces);
-                drawFaceLandmarks(outputBitmap, faces);  
+                //drawFaceLandmarks(outputBitmap, faces);  
 
                 if (!faces.isEmpty()) {
-                    emitFaceData(faces, inputBitmap);
+                    emitFaceData(faces, inputBitmap, outputBitmap);
                 } else {
-                    emitFaceData(Collections.emptyList(), inputBitmap);
+                    emitFaceData(Collections.emptyList(), inputBitmap, outputBitmap);
                 }
 
                 VideoFrame resultFrame = convertor.bitmap2VideoFrame(outputBitmap,
@@ -185,9 +193,22 @@ public class FaceDetectionFactory implements VideoFrameProcessorFactoryInterface
             
             
 
-            private void emitFaceData(List<Face> faces, Bitmap inputBitmap) {
+            private void emitFaceData(List<Face> faces, Bitmap inputBitmap, Bitmap outputBitmap) {
                 if (reactContext == null || !reactContext.hasActiveCatalystInstance()) return;
+
+                Canvas canvas = new Canvas(outputBitmap);
+                // Face bounding box paint
+                Paint boxPaint = new Paint();
+                boxPaint.setColor(Color.GREEN);
+                boxPaint.setStrokeWidth(1);
+                boxPaint.setStyle(Paint.Style.STROKE);
             
+                // Contour paint
+                Paint contourPaint = new Paint();
+                contourPaint.setColor(Color.CYAN);
+                contourPaint.setStrokeWidth(1);
+                contourPaint.setStyle(Paint.Style.STROKE);
+
                 WritableArray faceArray = Arguments.createArray();
             
                 if (faces.size() == 1 && antiSpoofHelper != null) {
@@ -204,19 +225,44 @@ public class FaceDetectionFactory implements VideoFrameProcessorFactoryInterface
                         Log.e("FaceDetection:Antispoof", "Spoof detection failed", e);
                         spoofScores = new float[]{-1, -1}; // fallback values
                     } */
-                    Rect box = face.getBoundingBox();
+                    
+                    //drawFaceLandmarks(outputBitmap, faces);  
+                    
+                    /* Rect box = face.getBoundingBox();
                     int x = Math.max(0, box.left);
                     int y = Math.max(0, box.top);
                     int w = Math.min(inputBitmap.getWidth() - x, box.width());
-                    int h = Math.min(inputBitmap.getHeight() - y, box.height());
+                    int h = Math.min(inputBitmap.getHeight() - y, box.height()); */
 
-                    if (w > 0 && h > 0) {
+                    //if (w > 0 && h > 0) {
                         try {
-                            Bitmap croppedFace = Bitmap.createBitmap(inputBitmap, x, y, w, h);
-                            Bitmap resizedFace = Bitmap.createScaledBitmap(croppedFace, 80, 80, true); // Match your ONNX model input size
+                            //Bitmap croppedFace = Bitmap.createBitmap(inputBitmap, x, y, w, h);
+                            //Bitmap resizedFace = Bitmap.createScaledBitmap(croppedFace, 80, 80, true); // Match your ONNX model input size
+                            Bitmap croppedFace = cropAndResizeFace(inputBitmap, face.getBoundingBox(), 80, 80); // or 224x224 based on your model
 
-                            float[] spoofScores = antiSpoofHelper.runInference(resizedFace);
+                            float[] spoofScores = antiSpoofHelper.runInference(croppedFace);
                             Log.d("SpoofCheck", "Scores: " + Arrays.toString(spoofScores));
+                            boolean isReal = spoofScores[1] > 0.006f;
+                            if (isReal) {
+                                canvas.drawRect(face.getBoundingBox(), boxPaint);
+                                for (FaceContour contour : face.getAllContours()) {
+                                    for (PointF point : contour.getPoints()) {
+                                        canvas.drawCircle(point.x, point.y, 2, contourPaint);
+                                    }
+                                }
+                                /* float[] embedding = embeddingHelper.runEmbedding(croppedFace);
+                                Log.d("ArcFace", "Embedding Length: " + embedding.length);
+                                Log.d("ArcFace", "Embedding[0..5]: " + embedding[0] + ", " + embedding[1] + ", " + embedding[2] + ", ...");
+                                WritableArray embeddingArray = Arguments.createArray();
+                                for (float v : embedding) {
+                                    embeddingArray.pushDouble(v);
+                                }
+
+                                //WritableMap embeddingPayload = Arguments.createMap();
+                                faceMap.putArray("embedding", embeddingArray); */
+
+                                //drawFaceLandmarks(outputBitmap, faces);  
+                            }
                             
                             WritableArray scoreArray = Arguments.createArray();
                             for (float score : spoofScores) {
@@ -228,7 +274,7 @@ public class FaceDetectionFactory implements VideoFrameProcessorFactoryInterface
                         } catch (Exception e) {
                             Log.e("SpoofCheck", "Spoof detection error", e);
                         }
-                    }
+                    //}
             
                    
                     //WritableMap faceMap = Arguments.createMap();
@@ -304,6 +350,23 @@ public class FaceDetectionFactory implements VideoFrameProcessorFactoryInterface
                     Log.e("FaceDetection", "Failed to crop face", e);
                     return source;
                 }
+            }
+
+            private Bitmap cropAndResizeFace(Bitmap bitmap, Rect bbox, int targetWidth, int targetHeight) {
+                // Padding factor (e.g., 20% extra on all sides)
+                float paddingRatio = 0.2f;
+            
+                int paddingX = (int) (bbox.width() * paddingRatio);
+                int paddingY = (int) (bbox.height() * paddingRatio);
+            
+                int x = Math.max(bbox.left - paddingX, 0);
+                int y = Math.max(bbox.top - paddingY, 0);
+                int width = Math.min(bbox.width() + 2 * paddingX, bitmap.getWidth() - x);
+                int height = Math.min(bbox.height() + 2 * paddingY, bitmap.getHeight() - y);
+            
+                Bitmap cropped = Bitmap.createBitmap(bitmap, x, y, width, height);
+            
+                return Bitmap.createScaledBitmap(cropped, targetWidth, targetHeight, true);
             }
             
             

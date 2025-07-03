@@ -43,34 +43,7 @@ public class AntiSpoofingHelper {
         return buffer.toByteArray();
     }
 
-    public float[] runInferenceOld(Bitmap croppedFace) throws OrtException {
-        int inputHeight = croppedFace.getHeight();
-        int inputWidth = croppedFace.getWidth();
-
-        float[] inputTensor = new float[1 * 3 * inputHeight * inputWidth];
-
-        int idx = 0;
-        for (int y = 0; y < inputHeight; y++) {
-            for (int x = 0; x < inputWidth; x++) {
-                int pixel = croppedFace.getPixel(x, y);
-                inputTensor[idx++] = ((pixel >> 16) & 0xFF) / 255.0f; // R
-                inputTensor[idx++] = ((pixel >> 8) & 0xFF) / 255.0f;  // G
-                inputTensor[idx++] = (pixel & 0xFF) / 255.0f;         // B
-            }
-        }
-
-        long[] shape = {1, 3, inputHeight, inputWidth};
-        OnnxTensor input = OnnxTensor.createTensor(env, FloatBuffer.wrap(inputTensor), shape);
-
-        OrtSession.Result result = session.run(
-                Collections.singletonMap(session.getInputNames().iterator().next(), input));
-        float[][] output = (float[][]) result.get(0).getValue();
-        //OnnxValue outputValue = result.get(0);
-        //float[][] scoreArray = (float[][]) outputValue.getValue();
-        Log.d("AntiSpoofResults", "ONNX Output Shape: " + output.length + "x" + output[0].length);
-        Log.d("AntiSpoofResults", "Scores: " + Arrays.toString(output[0]));
-        return output[0]; // e.g. [0.9, 0.1] for [real, fake]
-    }
+    
 
     public float[] runInference(Bitmap inputBitmap) throws OrtException {
         // ONNX expects: shape [1, 3, H, W], e.g., [1, 3, 80, 80]
@@ -100,13 +73,51 @@ public class AntiSpoofingHelper {
         OnnxTensor input = OnnxTensor.createTensor(env, FloatBuffer.wrap(inputTensor), shape);
     
         OrtSession.Result result = session.run(Collections.singletonMap(session.getInputNames().iterator().next(), input));
-        float[][] output = (float[][]) result.get(0).getValue();
+        float[][] logits = (float[][]) result.get(0).getValue();
+        float[] softmax = applySoftmax(logits[0]);
+
+        int predictedClass = getMaxIndex(softmax);
+        float confidence = softmax[predictedClass];
+        Log.d("AntiSpoofResults", "Predicted class: " + predictedClass + " with confidence: " + confidence);
+
+        //Log.d("AntiSpoofResults", "ONNX Output Shape: " + output.length + "x" + output[0].length);
+        Log.d("AntiSpoofResults", "Scores: " + Arrays.toString(softmax));
     
-        Log.d("AntiSpoofResults", "ONNX Output Shape: " + output.length + "x" + output[0].length);
-        Log.d("AntiSpoofResults", "Scores: " + Arrays.toString(output[0]));
-    
-        return output[0];  // e.g., [real_score, fake_score]
+        return softmax;  // e.g., [real_score, fake_score]
     }
+
+    private float[] applySoftmax(float[] logits) {
+        float max = Float.NEGATIVE_INFINITY;
+        for (float logit : logits) {
+            if (logit > max) max = logit;
+        }
+
+        float sum = 0f;
+        float[] expScores = new float[logits.length];
+        for (int i = 0; i < logits.length; i++) {
+            expScores[i] = (float) Math.exp(logits[i] - max); // subtract max for numerical stability
+            sum += expScores[i];
+        }
+
+        for (int i = 0; i < expScores.length; i++) {
+            expScores[i] /= sum;
+        }
+
+        return expScores;
+    }
+
+    private int getMaxIndex(float[] values) {
+        int maxIndex = 0;
+        float maxValue = values[0];
+        for (int i = 1; i < values.length; i++) {
+            if (values[i] > maxValue) {
+                maxIndex = i;
+                maxValue = values[i];
+            }
+        }
+        return maxIndex;
+    }
+    
     
 
     public void close() throws OrtException {
