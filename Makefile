@@ -5,3 +5,6 @@
 
 dev:
 	npx expo run:android
+
+clean:
+	cd android && ./gradlew --stop && ./gradlew clean && cd ..
