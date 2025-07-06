@@ -1,11 +1,11 @@
 import { clsx, type ClassValue } from "clsx";
 import * as Device from "expo-device";
+import * as LocalAuthentication from "expo-local-authentication";
 import * as Location from "expo-location";
 import Geohash from "ngeohash";
 import { NativeModules } from "react-native";
 import { twMerge } from "tailwind-merge";
-
-import { getSavedEmbedding } from "./storage";
+import { getSavedEmbedding, getTrustedZones } from "./storage";
 
 const { VideoEffectModule } = NativeModules;
 
@@ -35,6 +35,18 @@ export const getCurrentGeoHash = async (): Promise<string | null> => {
   } catch (err) {
     console.error("Failed to get location or compute geohash:", err);
     return null;
+  }
+};
+
+export const isInTrustedGeoZone = async (): Promise<boolean> => {
+  try {
+    const currentGeo = await getCurrentGeoHash();
+    if (!currentGeo) return false;
+    const trusted = getTrustedZones();
+    return trusted.includes(currentGeo);
+  } catch (err) {
+    console.error("Geo check failed:", err);
+    return false;
   }
 };
 
@@ -75,3 +87,23 @@ export function verifyUser(embedding1: number[]): boolean {
     return false;
   }
 }
+
+export const authenticateDevice = async (): Promise<boolean> => {
+  // Check if device supports local auth
+  const hasHardware = await LocalAuthentication.hasHardwareAsync();
+  const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+  console.warn("hasHardware", hasHardware, "isEnrolled", isEnrolled);
+  if (!hasHardware || !isEnrolled) {
+    console.warn("Biometrics not available");
+    return false;
+  }
+
+  // Trigger authentication prompt
+  const result = await LocalAuthentication.authenticateAsync({
+    promptMessage: "Authenticate to continue",
+    fallbackLabel: "Use Passcode",
+    cancelLabel: "Cancel",
+  });
+
+  return result.success;
+};

@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Dimensions, NativeEventEmitter, EmitterSubscription, NativeModules, Text, View, TextInput, Pressable } from "react-native";
+import { Dimensions, NativeEventEmitter, EmitterSubscription, NativeModules, Text, View, TextInput, Pressable, Alert } from "react-native";
 import { mediaDevices, RTCView } from "react-native-webrtc";
-import { cn, getEmbedding, verifyUser } from '@/lib/utils';
+import { authenticateDevice, cn, getEmbedding, isInTrustedGeoZone, verifyUser } from '@/lib/utils';
 import { router, useLocalSearchParams } from "expo-router";
-import { getSavedEmbedding, saveFaceEmbedding, SavePin } from "@/lib/storage";
+import { getPin, getSavedEmbedding, saveFaceEmbedding, SavePin } from "@/lib/storage";
 
 const { VideoEffectModule } = NativeModules;
 const eventEmitter = new NativeEventEmitter(NativeModules.VideoEffectModule);
@@ -20,6 +20,7 @@ export default function FaceScanScreen() {
   const [faceData, setFaceData] = useState(null);
   const [faceInView, setFaceInView] = useState(false);
   const [livenessComplete, setlivenessComplete] = useState(false);
+  const [showPinFallback, setShowPhowPinFallback] = useState(false);
 
   const livenessEvent = useRef<EmitterSubscription | null>(null);
 
@@ -51,17 +52,48 @@ export default function FaceScanScreen() {
       SavePin(pin);
       router.replace('/dash');
       reset()
-      
+
     })
-    
+  }
+
+  const handlePinLogin = () => {
+    if (!pin) return;
+    const savedPin = getPin()
+    if (savedPin === pin) {
+      router.replace('/dash');
+      reset()
+    }
   }
 
   const handleLogin = () => {
     getEmbedding().then((embedding) => {
-      const verified = verifyUser(embedding);
-      if (verified) {
-        router.replace('/dash');
-      }
+
+      setTimeout(async () => {
+        const verified = verifyUser(embedding);
+        if (verified) {
+          router.replace('/dash');
+        } else {
+          //const authOk = await authenticateDevice();
+          //if (!authOk) {
+          //  Alert.alert('Authentication failed', 'Please try again');
+          //  return;
+          //}
+          //if (authOk) {
+            setShowPhowPinFallback(true)
+          //  return
+          //}
+          const trustedZone = await isInTrustedGeoZone();
+          if (trustedZone) {
+            setShowPhowPinFallback(true)
+            return
+          } else {
+            Alert.alert('Authentication failed', 'Please try again');
+            return
+          }
+
+        }
+      }, 1500); // stimulate delay to show processing
+
     })
   }
 
@@ -146,7 +178,7 @@ export default function FaceScanScreen() {
       setStatusMessage("Processing ...");
       setPrompt("");
       setlivenessComplete(true);
-      if(mode === 'login') {
+      if (mode === 'login') {
         handleLogin()
       }
       return;
@@ -202,13 +234,38 @@ export default function FaceScanScreen() {
     }
   }, [faceData, validations, lastValidationTime, livenessComplete]);
 
-  
+
 
   if (livenessComplete && mode === "login") {
-    <View className="flex-1 justify-center items-center gap-4 bg-white pt-20">
-      <Text className="text-xl font-semibold text-gray-600">Processing</Text>
+    return (
+      <View className="flex-1 justify-center items-center gap-4 bg-white pt-20">
+        {!showPinFallback &&<Text className="text-xl font-semibold text-gray-600">Processing</Text>}
 
-    </View>
+        {showPinFallback && (
+          <>
+            <Text className="text-xl font-semibold text-gray-600">Enter PIN</Text>
+            <TextInput
+              keyboardType="numeric"
+              secureTextEntry
+              maxLength={4}
+              //minLength={4}
+              placeholder="Enter PIN for this device"
+              //value={pin}
+              onChangeText={setPin}
+              className="border w-1/2 border-gray-300 rounded px-4 py-3 mb-4 text-base"
+            />
+            <Pressable
+              className="bg-green-300 py-3 rounded px-6 "
+              onPress={() => handlePinLogin()}
+            >
+              <Text className="text-white text-center text-lg">Confirm</Text>
+            </Pressable>
+          </>
+        )}
+
+
+      </View>
+    )
   }
 
   if (livenessComplete && mode === "signup") {
@@ -225,7 +282,7 @@ export default function FaceScanScreen() {
           placeholder="Enter PIN for this device"
           //value={pin}
           onChangeText={setPin}
-          className="border w-1/4 border-gray-300 rounded px-4 py-3 mb-4 text-base"
+          className="border w-1/2 border-gray-300 rounded px-4 py-3 mb-4 text-base"
         />
         <Pressable
           className="bg-green-300 py-3 rounded px-6 "

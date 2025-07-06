@@ -1,9 +1,19 @@
-import { clearStorage } from "@/lib/storage";
+import { clearStorage, saveTrustedZones } from "@/lib/storage";
+import { getCurrentGeoHash } from "@/lib/utils";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { useEffect } from "react";
 import { Pressable, Text, View } from "react-native";
 
 export default function DashScreen() {
+  useEffect(() => {
+    getCurrentGeoHash().then((geo) => {
+      if (geo) {
+        saveTrustedZones([geo]);
+      }
+    });
+  }, []);
+
   const handleLogout = (clear: boolean = false) => {
     if (clear) {
       clearStorage();
@@ -13,7 +23,7 @@ export default function DashScreen() {
   };
 
   return (
-    <View className="flex-1 items-center gap-4 justify-center bg-white px-6">
+    <View className="flex-1 items-center justify-center gap-4 bg-white px-6">
       <Ionicons name="checkmark-circle-outline" size={64} color="#22c55e" />
       <Text className="mt-4 text-2xl font-bold text-gray-800">Welcome!</Text>
       <Text className="mb-6 mt-2 text-center text-gray-500">
