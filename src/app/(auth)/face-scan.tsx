@@ -43,6 +43,9 @@ export default function FaceScanScreen() {
 
   const reset = () => {
     setlivenessComplete(false)
+    setShowPhowPinFallback(false)
+    setPin(null)
+    setLastValidationTime(0)
   }
 
   const handleRegister = () => {
@@ -165,11 +168,11 @@ export default function FaceScanScreen() {
       spoofScores,
     } = faceData;
 
-    //if (!spoofScores || spoofScores[1] < 0.006) {
-    //  setStatusMessage("Face not detected");
+    if (!spoofScores || spoofScores[1] < 0.006) {
+     setStatusMessage("Verifying ...");
     //  setPrompt("Align your face in the circle");
     //  return;
-    //}
+    }
 
     setStatusMessage("");
 
