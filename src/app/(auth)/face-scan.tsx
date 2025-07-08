@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Dimensions, NativeEventEmitter, EmitterSubscription, NativeModules, Text, View, TextInput, Pressable, Alert } from "react-native";
 import { mediaDevices, RTCView } from "react-native-webrtc";
-import { authenticateDevice, cn, getEmbedding, isInTrustedGeoZone, verifyUser } from '@/lib/utils';
+import {  cn, getEmbedding, isInTrustedGeoZone, verifyUser } from '@/lib/utils';
 import { router, useLocalSearchParams } from "expo-router";
 import { getPin, getSavedEmbedding, saveFaceEmbedding, SavePin } from "@/lib/storage";
 
