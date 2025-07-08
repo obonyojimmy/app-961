@@ -238,11 +238,11 @@ public class FaceDetectionFactory implements VideoFrameProcessorFactoryInterface
                         try {
                             //Bitmap croppedFace = Bitmap.createBitmap(inputBitmap, x, y, w, h);
                             //Bitmap resizedFace = Bitmap.createScaledBitmap(croppedFace, 80, 80, true); // Match your ONNX model input size
-                            Bitmap croppedFace = cropAndResizeFace(inputBitmap, face.getBoundingBox(), 80, 80); // or 224x224 based on your model
+                            //Bitmap croppedFace = cropAndResizeFace(inputBitmap, face.getBoundingBox(), 80, 80); // or 224x224 based on your model
 
-                            float[] spoofScores = antiSpoofHelper.runInference(croppedFace);
+                            float[] spoofScores = antiSpoofHelper.predict(inputBitmap);
                             Log.d("SpoofCheck", "Scores: " + Arrays.toString(spoofScores));
-                            boolean isReal = spoofScores[1] > 0.006f;
+                            boolean isReal = spoofScores[0] > 0.3f;
                             if (isReal) {
                                 canvas.drawRect(face.getBoundingBox(), boxPaint);
                                 for (FaceContour contour : face.getAllContours()) {
@@ -326,7 +326,7 @@ public class FaceDetectionFactory implements VideoFrameProcessorFactoryInterface
             
             private String runAntiSpoof(Bitmap faceBitmap) {
                 try {
-                    float[] output = antiSpoofHelper.runInference(faceBitmap);
+                    float[] output = antiSpoofHelper.predict(faceBitmap);
                     int label = output[0] > output[1] ? 0 : 1; 
                     float score = Math.max(output[0], output[1]);
                     // todo

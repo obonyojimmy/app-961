@@ -24,7 +24,7 @@ export default function FaceScanScreen() {
 
   const livenessEvent = useRef<EmitterSubscription | null>(null);
 
-  const VALIDATION_COOLDOWN_MS = 1500; // 1.5 seconds between validations
+  const VALIDATION_COOLDOWN_MS = 1000; // 1 seconds between validations
   const [lastValidationTime, setLastValidationTime] = useState(0);
 
   const [pin, setPin] = useState<string | null>(null);
@@ -156,9 +156,7 @@ export default function FaceScanScreen() {
       livenessEvent.current.remove()
     }
 
-    const now = Date.now();
-    if (now - lastValidationTime < VALIDATION_COOLDOWN_MS) return;
-
+    
     const {
       smilingProbability,
       leftEyeOpenProbability,
@@ -168,11 +166,15 @@ export default function FaceScanScreen() {
       spoofScores,
     } = faceData;
 
-    if (!spoofScores || spoofScores[1] < 0.006) {
-     setStatusMessage("Verifying ...");
-    //  setPrompt("Align your face in the circle");
-    //  return;
+    if (!spoofScores || spoofScores[0] < 0.3) {
+      //setStatusMessage("No face detected");
+      //setPrompt("Align your face in the circle");
+      return;
     }
+
+    const now = Date.now();
+    if (now - lastValidationTime < VALIDATION_COOLDOWN_MS) return;
+
 
     setStatusMessage("");
 
@@ -192,7 +194,7 @@ export default function FaceScanScreen() {
 
     switch (nextValidation.label) {
       case "smile":
-        if (smilingProbability > 0.5) {
+        if (smilingProbability > 0.3) {
           markValidationPassed("smile");
           setLastValidationTime(now);
         }
