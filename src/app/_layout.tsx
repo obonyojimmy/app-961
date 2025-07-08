@@ -1,7 +1,11 @@
+import { DARK_THEME, LIGHT_THEME, useColorScheme } from "@/hooks/useColorScheme";
+import { spaceMonofont } from "@/lib/assets";
+import { ThemeProvider } from "@react-navigation/native";
+import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import "../../global.css";
 
@@ -20,36 +24,24 @@ SplashScreen.setOptions({
 });
 
 export default function RootLayout() {
-  const [appIsReady, setAppIsReady] = useState(false);
+  const { isDarkColorScheme } = useColorScheme();
+  const [loaded, error] = useFonts({
+    SpaceMono: spaceMonofont,
+  });
 
   useEffect(() => {
-    async function prepare() {
-      try {
-        // Pre-load fonts, make any API calls you need to do here
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-      } catch (e) {
-        console.warn(e);
-      } finally {
-        // Tell the application to render
-        setAppIsReady(true);
-      }
-    }
-
-    prepare();
-  }, []);
-
-  useEffect(() => {
-    if (appIsReady) {
+    // Pre-load fonts, or pre-fetch  API calls you need to do here
+    if (loaded) {
       SplashScreen.hideAsync();
     }
-  }, [appIsReady]);
+  }, [loaded]);
 
-  if (!appIsReady) {
+  if (!loaded) {
     return null;
   }
 
   return (
-    <>
+    <ThemeProvider value={isDarkColorScheme ? DARK_THEME : LIGHT_THEME}>
       <StatusBar style="auto" />
       <GestureHandlerRootView style={{ flex: 1 }}>
         <Stack
@@ -58,6 +50,6 @@ export default function RootLayout() {
           }}
         />
       </GestureHandlerRootView>
-    </>
+    </ThemeProvider>
   );
 }
