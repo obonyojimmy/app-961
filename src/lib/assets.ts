@@ -1,1 +1,3 @@
 export const spaceMonofont = require("@assets/fonts/SpaceMono-Regular.ttf");
+export const bannerText = `To use this feature, please login or create an account. Click "login" in the header to get started.`
+export const bannerRegister = `Passwords aren't secure and we only allow real people on our app - no bots, no fake accounts, no hackers/scammers, and no foreign interference.Just like FaceID, you use your face to access your account on our app - cool, we know 😎`

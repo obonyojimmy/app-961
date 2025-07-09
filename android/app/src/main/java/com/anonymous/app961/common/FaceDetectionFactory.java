@@ -242,7 +242,7 @@ public class FaceDetectionFactory implements VideoFrameProcessorFactoryInterface
 
                             float[] spoofScores = antiSpoofHelper.predict(inputBitmap);
                             Log.d("SpoofCheck", "Scores: " + Arrays.toString(spoofScores));
-                            boolean isReal = spoofScores[0] > 0.3f;
+                            boolean isReal = spoofScores[0] > 0.27f;
                             if (isReal) {
                                 canvas.drawRect(face.getBoundingBox(), boxPaint);
                                 for (FaceContour contour : face.getAllContours()) {

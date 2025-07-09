@@ -1,14 +1,17 @@
 import Button from "@/components/Button";
 import Image from "@/components/Image";
+import Text from "@/components/Text";
+import { bannerRegister, bannerText } from "@/lib/assets";
 import { ChatMessage } from "@/lib/types";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useTheme } from "@react-navigation/native";
-import { Stack } from "expo-router";
+import { router, Stack } from "expo-router";
 import { useState } from "react";
 import {
   Keyboard,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   TextInput,
   TouchableWithoutFeedback,
@@ -20,6 +23,14 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const theme = useTheme();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [isOnboarding, setIsOnBoarding] = useState<boolean>(true);
+
+  const navigateAuth = (mode: "signup" | "login") => {
+    router.push({
+      pathname: "/auth",
+      params: { mode },
+    });
+  };
 
   return (
     <KeyboardAvoidingView
@@ -56,12 +67,34 @@ export default function HomeScreen() {
               headerRight: () => {
                 return (
                   <View className="flex-row items-center pr-2">
-                    <Button size="md" variant="link" label="Login" />
+                    <Button
+                      onPress={() => navigateAuth("login")}
+                      size="md"
+                      variant="link"
+                      label="Login"
+                    />
                   </View>
                 );
               },
             }}
           />
+          {isOnboarding && (
+            <View className="gap-2.5">
+              <Text variant="subtitle">{bannerText}</Text>
+              <Text variant="subtitle">{bannerRegister}</Text>
+              <View className="m-1.5 mt-3.5 items-center justify-center rounded-lg bg-slate-100 px-2 py-3">
+                <Text className="mb-4 text-center text-2xl font-bold">Register with Face</Text>
+                <Text className="mb-4 text-center text-lg font-medium">
+                  Take a selfie and register your account
+                </Text>
+                <Pressable
+                  onPress={() => navigateAuth("signup")}
+                  className="mb-4 w-full rounded-full bg-red-400 px-3 py-3">
+                  <Text className="text-center text-lg text-white">Take a Selfie</Text>
+                </Pressable>
+              </View>
+            </View>
+          )}
           <ScrollView contentContainerClassName="gap-2" className="flex-1 pt-1"></ScrollView>
 
           <View
