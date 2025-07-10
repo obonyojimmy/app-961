@@ -11,6 +11,7 @@ export default function TabLayout() {
         tabBarActiveTintColor: "#ffd33d",
         headerShown: false,
         tabBarShowLabel: false,
+        tabBarHideOnKeyboard: false,
         tabBarStyle: Platform.select({
           ios: {
             // Use a transparent background on iOS to show the blur effect

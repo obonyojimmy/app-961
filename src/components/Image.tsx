@@ -7,10 +7,10 @@ import { cssInterop } from "nativewind";
 const Image = cssInterop(ExpoImage, {
   className: {
     target: "style",
-    nativeStyleToProp: {
+    /* nativeStyleToProp: {
       height: true,
       width: true,
-    },
+    }, */
   },
 });
 

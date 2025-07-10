@@ -1,0 +1,22 @@
+{
+    //"editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.codeActionsOnSave": {
+        "source.fixAll": "explicit"
+    },
+    "tailwindCSS.classAttributes": [
+        "class",
+        "className",
+    ],
+    "tailwindCSS.experimental.classRegex": [
+        [
+            "cva\\(([^)]*)\\)",
+            "[\"'`]([^\"'`]*).*?[\"'`]"
+        ],
+        [
+            "cx\\(([^)]*)\\)",
+            "(?:'|\"|`)([^']*)(?:'|\"|`)"
+        ]
+    ],
+    "codeium.enableCodeLens": true,
+    "typescript.tsdk": "node_modules/typescript/lib",
+}

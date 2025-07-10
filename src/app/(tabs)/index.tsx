@@ -1,139 +1,183 @@
+import AuthModal from "@/components/AuthModal";
 import Button from "@/components/Button";
 import Image from "@/components/Image";
+import { MessageCard } from "@/components/MessageCard";
 import Text from "@/components/Text";
-import { bannerRegister, bannerText } from "@/lib/assets";
+import { useChatMessages } from "@/hooks/useChatMessages";
+import { bannerText, ONBOARDING_aCTIONS } from "@/lib/assets";
+import { addOnBoardingAction, resetChatMessages, storage } from "@/lib/storage";
 import { ChatMessage } from "@/lib/types";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useHeaderHeight } from "@react-navigation/elements";
 import { useTheme } from "@react-navigation/native";
-import { router, Stack } from "expo-router";
+import { Stack } from "expo-router";
 import { useState } from "react";
-import {
-  Keyboard,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  TextInput,
-  TouchableWithoutFeedback,
-  View,
-} from "react-native";
+import { Keyboard, ScrollView, TextInput, TouchableWithoutFeedback, View } from "react-native";
+import { KeyboardAvoidingView } from "react-native-keyboard-controller";
+import { useMMKVBoolean } from "react-native-mmkv";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
+  const headerHeight = useHeaderHeight();
   const theme = useTheme();
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [isOnboarding, setIsOnBoarding] = useState<boolean>(true);
+  const [messages, addMessage] = useChatMessages();
+  const [isOnboarding, setIsOnBoarding] = useMMKVBoolean("auth.isOnboarding");
+  const [isAutheticated, setIsAutheticated] = useMMKVBoolean("auth.isAutheticated");
+  const [authModalOpen, setAuthModalOpen] = useState<boolean>(false);
+  const [inputText, setInpuText] = useState<string>("");
 
-  const navigateAuth = (mode: "signup" | "login") => {
-    router.push({
-      pathname: "/auth",
-      params: { mode },
-    });
+  const openAuthModal = () => {
+    setAuthModalOpen(true);
+  };
+
+  const onCloseAuthModal = () => {
+    setAuthModalOpen(false);
+  };
+
+  const handleSendMessage = () => {
+    const now = Date.now();
+    const msg = {
+      id: `user_${now}`,
+      role: "user",
+      content: inputText,
+    } as ChatMessage;
+    addMessage(msg);
+    setInpuText("");
+    Keyboard.dismiss();
+    if (isOnboarding) {
+      const prevStep = storage.getString("auth.OnboardingStep");
+      const stepAction = ONBOARDING_aCTIONS.find((a) => a.id.toString() === prevStep);
+
+      if (stepAction?.state) {
+        storage.set(`user.${stepAction.state}`, inputText);
+      }
+
+      if (prevStep) {
+        const nextAction = ONBOARDING_aCTIONS.find((a) => a.id === parseInt(prevStep) + 1);
+        if (nextAction?.module === "registerPrompt") {
+          resetChatMessages();
+        }
+        addOnBoardingAction(parseInt(prevStep) + 1);
+      }
+    }
   };
 
   return (
-    <KeyboardAvoidingView
-      enabled
-      //keyboardVerticalOffset={insets.bottom}
-      style={{ flex: 1 }}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={160}>
-      <TouchableWithoutFeedback style={{ flex: 1 }} className="flex-1" onPress={Keyboard.dismiss}>
-        <View
-          //contentContainerClassName="gap-2"
-          style={{ marginBottom: insets.bottom }}
-          className="flex-1 px-2 pt-2">
-          <Stack.Screen
-            options={{
-              title: "",
-              //headerTransparent: true,
-              headerShown: true,
-              headerShadowVisible: false,
-              headerTitleAlign: "center",
-              headerTitle: () => {
-                return (
-                  <View className="flex-row items-center justify-center gap-1.5">
-                    <Image
-                      //contentFit="cover"
-                      cachePolicy="memory-disk"
-                      source={require("@assets/icon.png")}
-                      className={"h-12 w-12 rounded-full"}
-                    />
-                  </View>
-                );
-              },
-
-              headerRight: () => {
-                return (
-                  <View className="flex-row items-center pr-2">
-                    <Button
-                      onPress={() => navigateAuth("login")}
-                      size="md"
-                      variant="link"
-                      label="Login"
-                    />
-                  </View>
-                );
-              },
-            }}
-          />
-          {isOnboarding && (
-            <View className="gap-2.5">
-              <Text variant="subtitle">{bannerText}</Text>
-              <Text variant="subtitle">{bannerRegister}</Text>
-              <View className="m-1.5 mt-3.5 items-center justify-center rounded-lg bg-slate-100 px-2 py-3">
-                <Text className="mb-4 text-center text-2xl font-bold">Register with Face</Text>
-                <Text className="mb-4 text-center text-lg font-medium">
-                  Take a selfie and register your account
-                </Text>
-                <Pressable
-                  onPress={() => navigateAuth("signup")}
-                  className="mb-4 w-full rounded-full bg-red-400 px-3 py-3">
-                  <Text className="text-center text-lg text-white">Take a Selfie</Text>
-                </Pressable>
+    <View
+      className="flex-1 pb-2"
+      // style={{ paddingBottom: insets.bottom }}
+    >
+      <Stack.Screen
+        options={{
+          title: "",
+          //headerTransparent: true,
+          headerShown: true,
+          headerShadowVisible: false,
+          headerTitleAlign: "center",
+          headerTitle: () => {
+            return (
+              <View className="flex-row items-center justify-center gap-1.5">
+                <Image
+                  //contentFit="cover"
+                  cachePolicy="memory-disk"
+                  source={require("@assets/icon.png")}
+                  className={"h-12 w-12 rounded-full"}
+                />
               </View>
-            </View>
-          )}
-          <ScrollView contentContainerClassName="gap-2" className="flex-1 pt-1"></ScrollView>
+            );
+          },
 
+          headerRight: () => {
+            return (
+              <View className="flex-row items-center pr-2">
+                <Button
+                  onPress={() => {
+                    //_resetOnboarding(); // for testing only
+                    setAuthModalOpen(true);
+                  }}
+                  size="md"
+                  variant="link"
+                  label="Login"
+                />
+              </View>
+            );
+          },
+        }}
+      />
+      <KeyboardAvoidingView
+        //keyboardVerticalOffset={insets.bottom}
+        keyboardVerticalOffset={headerHeight + 5}
+        style={{ flex: 1 }}
+        behavior="translate-with-padding"
+        // behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <TouchableWithoutFeedback style={{ flex: 1 }} onPress={Keyboard.dismiss}>
           <View
-            //style={{ marginBottom: insets.bottom }}
-            className="flex-row items-center gap-2 self-end rounded-2xl border border-slate-200 bg-slate-50 p-2 shadow-sm shadow-slate-50">
-            <Button
-              //size="sm"
-              //label="Post"
-              variant="link"
-              gap="lg"
-              iconRight={<MaterialCommunityIcons name="plus" size={24} color={theme.colors.text} />}
-            />
-            <TextInput
-              placeholder="Type a message ..."
-              //value={comment}
-              //onChangeText={setComment}
-              //multiline
-              //numberOfLines={1}
-              className="flex-1 text-base font-normal text-slate-600"
-            />
-            <Button
-              //size="sm"
-              //label="Post"
-              variant="link"
-              gap="lg"
-              iconRight={
-                <MaterialCommunityIcons name="microphone" size={24} color={theme.colors.text} />
-              }
-            />
-            <Button
-              //size="sm"
-              //label="Post"
-              variant="link"
-              gap="lg"
-              iconRight={<MaterialCommunityIcons name="send" size={24} color={theme.colors.text} />}
-            />
+            //contentContainerClassName="gap-2"
+            //
+            className="flex-1 px-2 pt-2">
+            {!isOnboarding && !isAutheticated && (
+              <View className="gap-2.5">
+                <Text variant="subtitle">{bannerText}</Text>
+              </View>
+            )}
+            <ScrollView contentContainerClassName="gap-2.5" className="flex-1 pt-1">
+              {Array.isArray(messages) &&
+                messages.map((item) => (
+                  <MessageCard
+                    key={item.id}
+                    data={item}
+                    openAuthModal={openAuthModal}
+                    onCloseAuthModal={onCloseAuthModal}
+                  />
+                ))}
+            </ScrollView>
+
+            <View
+              //style={{ marginBottom: insets.bottom }}
+              className="flex-row items-center gap-2 self-end rounded-2xl border border-slate-200 bg-slate-50 p-2 shadow-sm shadow-slate-50">
+              {/*  <Button
+                //size="sm"
+                //label="Post"
+                variant="link"
+                gap="lg"
+                iconRight={
+                  <MaterialCommunityIcons name="microphone" size={24} color={theme.colors.text} />
+                }
+              /> */}
+              <TextInput
+                placeholder="Ask Anything ..."
+                value={inputText}
+                onChangeText={setInpuText}
+                //multiline
+                //numberOfLines={1}
+                className="flex-1 text-base font-normal text-slate-600"
+              />
+              <Button
+                //size="sm"
+                //label="Post"
+                variant="link"
+                gap="lg"
+                iconRight={
+                  <MaterialCommunityIcons name="plus" size={24} color={theme.colors.text} />
+                }
+              />
+              <Button
+                //size="sm"
+                //label="Post"
+                onPress={handleSendMessage}
+                variant="link"
+                gap="lg"
+                iconRight={
+                  <MaterialCommunityIcons name="send" size={24} color={theme.colors.text} />
+                }
+              />
+            </View>
           </View>
-        </View>
-      </TouchableWithoutFeedback>
-    </KeyboardAvoidingView>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
+      {authModalOpen && <AuthModal open={authModalOpen} onClose={onCloseAuthModal} />}
+    </View>
   );
 }

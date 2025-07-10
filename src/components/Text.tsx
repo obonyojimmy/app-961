@@ -38,6 +38,7 @@ const textVariants = cva("text-slate-600 dark:text-slate-50", {
       medium: "font-medium",
       semibold: "font-semibold",
       bold: "font-bold",
+      extrabold: "font-extrabold",
     },
   },
   defaultVariants: {
@@ -58,7 +59,7 @@ export default function Text({
 }: TextProps) {
   return (
     <RNText
-      className={cn(textVariants({ variant, size, color }), className)}
+      className={cn(textVariants({ variant, size, color, fontWeight }), className)}
       style={style}
       {...rest}
     />
