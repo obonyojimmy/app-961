@@ -161,9 +161,9 @@ export default function FaceScanner({
 
     if (Array.isArray(spoofScores) && spoofScores[0] < 0.27) {
       //setStatusMessage("No face detected");
-      setPrompt("Face not recognized");
-      setDetails("Please adjust angle or lighting.");
-      setIsInvalid(true);
+      //setPrompt("Face not recognized");
+      //setDetails("Please adjust angle or lighting.");
+      //setIsInvalid(true);
       setAttempts((prev) => prev + 1);
       //setScanning(false)
       return;

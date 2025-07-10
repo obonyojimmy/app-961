@@ -91,15 +91,17 @@ export default function HomeScreen() {
           headerRight: () => {
             return (
               <View className="flex-row items-center pr-2">
-                <Button
-                  onPress={() => {
-                    //_resetOnboarding(); // for testing only
-                    setAuthModalOpen(true);
-                  }}
-                  size="md"
-                  variant="link"
-                  label="Login"
-                />
+                {!isAutheticated && (
+                  <Button
+                    onPress={() => {
+                      //_resetOnboarding(); // for testing only
+                      setAuthModalOpen(true);
+                    }}
+                    size="md"
+                    variant="link"
+                    label="Login"
+                  />
+                )}
               </View>
             );
           },
